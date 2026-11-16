@@ -151,53 +151,53 @@ fn void pdq_swap_offsets(
     }
 }
 
-fn void pdq_insertion_sort(ElementType[] data, CmpFn cmp, Context ctx) @inline
-{
-    ElementType* begin = data.ptr;
-    ElementType* end   = begin + data.len;
-    if (begin == end) return;
-
-    for (ElementType* current = begin + 1; current < end; current++)
-    {
-        if (pdq_less(cmp, ctx, *current, *(current - 1)))
-        {
-            ElementType key   = *current;
-            ElementType* hole = current;
-
-            do
-            {
-                *hole = *(hole - 1);
-                hole--;
-            } while (hole > begin && pdq_less(cmp, ctx, key, *(hole - 1)));
-
-            *hole = key;
-        }
-    }
-}
-
-fn void pdq_unguarded_insertion_sort(ElementType[] data, CmpFn cmp, Context ctx) @inline
-{
-    ElementType* begin = data.ptr;
-    ElementType* end   = begin + data.len;
-    if (begin == end) return;
-
-    for (ElementType* current = begin + 1; current < end; current++)
-    {
-        if (pdq_less(cmp, ctx, *current, *(current - 1)))
-        {
-            ElementType key   = *current;
-            ElementType* hole = current;
-
-            do
-            {
-                *hole = *(hole - 1);
-                hole--;
-            } while (pdq_less(cmp, ctx, key, *(hole - 1)));
-
-            *hole = key;
-        }
-    }
-}
+// fn void pdq_insertion_sort(ElementType[] data, CmpFn cmp, Context ctx) @inline
+// {
+//     ElementType* begin = data.ptr;
+//     ElementType* end   = begin + data.len;
+//     if (begin == end) return;
+// 
+//     for (ElementType* current = begin + 1; current < end; current++)
+//     {
+//         if (pdq_less(cmp, ctx, *current, *(current - 1)))
+//         {
+//             ElementType key   = *current;
+//             ElementType* hole = current;
+// 
+//             do
+//             {
+//                 *hole = *(hole - 1);
+//                 hole--;
+//             } while (hole > begin && pdq_less(cmp, ctx, key, *(hole - 1)));
+// 
+//             *hole = key;
+//         }
+//     }
+// }
+// 
+// fn void pdq_unguarded_insertion_sort(ElementType[] data, CmpFn cmp, Context ctx) @inline
+// {
+//     ElementType* begin = data.ptr;
+//     ElementType* end   = begin + data.len;
+//     if (begin == end) return;
+// 
+//     for (ElementType* current = begin + 1; current < end; current++)
+//     {
+//         if (pdq_less(cmp, ctx, *current, *(current - 1)))
+//         {
+//             ElementType key   = *current;
+//             ElementType* hole = current;
+// 
+//             do
+//             {
+//                 *hole = *(hole - 1);
+//                 hole--;
+//             } while (pdq_less(cmp, ctx, key, *(hole - 1)));
+// 
+//             *hole = key;
+//         }
+//     }
+// }
 
 fn bool pdq_partial_insertion_sort(ElementType[] data, CmpFn cmp, Context ctx) @inline
 {
@@ -206,27 +206,23 @@ fn bool pdq_partial_insertion_sort(ElementType[] data, CmpFn cmp, Context ctx) @
     if (begin == end) return true;
 
     usz limit = 0;
-
     for (ElementType* current = begin + 1; current < end; current++)
     {
         if (pdq_less(cmp, ctx, *current, *(current - 1)))
         {
-            if (limit > PARTIAL_INSERTION_SORT_LIMIT) return false;
-
             ElementType key   = *current;
             ElementType* hole = current;
-
             do
             {
                 *hole = *(hole - 1);
                 hole--;
             } while (hole > begin && pdq_less(cmp, ctx, key, *(hole - 1)));
-
             *hole = key;
             limit += (usz)(current - hole);
+
+            if (limit > PARTIAL_INSERTION_SORT_LIMIT) return false;
         }
     }
-
     return true;
 }
 
@@ -280,22 +276,9 @@ fn void pdq_heap_sort(ElementType[] data, CmpFn cmp, Context ctx)
     }
 }
 
-fn void pdq_break_patterns(ElementType[] data) @inline
-{
-    ElementType* p = data.ptr;
-    usz n          = data.len;
-
-    if (n < 8) return;
-
-    usz mid = n / 2;
-    pdq_swap_elem(p, p + n / 4);
-    pdq_swap_elem(p + mid, p + (n * 3) / 4);
-    pdq_swap_elem(p + (n - 1), p + mid);
-}
-
 <*
  @require value.len >= INSERTION_SORT_THRESHOLD : "Partitioning is only valid past the insertion sort threshold"
- @require !pdq_less(cmp, ctx, value[value.len - 1], value[0]) : "Last element must not be smaller than the pivot (sentinel for the unguarded scan)"
+ @require !pdq_less(cmp, ctx, value[value.len - 1], value[0]) || !pdq_less(cmp, ctx, value[value.len / 2 + 1], value[0]) : "Pivot must be a median of at least three elements (a stopper at end - 1 or at mid + 1 must not be smaller)"
 *>
 fn PartitionResult partition_right_branchless(ElementType[] value, CmpFn cmp, Context ctx) @inline
 {
@@ -330,8 +313,8 @@ fn PartitionResult partition_right_branchless(ElementType[] value, CmpFn cmp, Co
         pdq_swap_elem(first, last);
         first++;
 
-        char[BLOCK_SIZE + CACHELINE_SIZE] offsets_l_storage;
-        char[BLOCK_SIZE + CACHELINE_SIZE] offsets_r_storage;
+        char[BLOCK_SIZE + CACHELINE_SIZE] offsets_l_storage @noinit;
+        char[BLOCK_SIZE + CACHELINE_SIZE] offsets_r_storage @noinit;
 
         char* offsets_l = (char*)pdq_align_cacheline(&offsets_l_storage);
         char* offsets_r = (char*)pdq_align_cacheline(&offsets_r_storage);
@@ -594,6 +577,105 @@ fn ElementType* partition_left(ElementType[] value, CmpFn cmp, Context ctx) @inl
     return pivot_pos;
 }
 
+fn void pdq_sort4(ElementType* p, CmpFn cmp, Context ctx) @inline
+{
+    pdq_sort2(p, p + 1, cmp, ctx);
+    pdq_sort2(p + 2, p + 3, cmp, ctx);
+    pdq_sort2(p, p + 2, cmp, ctx);
+    pdq_sort2(p + 1, p + 3, cmp, ctx);
+    pdq_sort2(p + 1, p + 2, cmp, ctx);
+}
+
+fn void pdq_sort8(ElementType* p, CmpFn cmp, Context ctx) @inline
+{
+    pdq_sort2(p, p + 2, cmp, ctx);
+    pdq_sort2(p + 1, p + 3, cmp, ctx);
+    pdq_sort2(p + 4, p + 6, cmp, ctx);
+    pdq_sort2(p + 5, p + 7, cmp, ctx);
+
+    pdq_sort2(p, p + 4, cmp, ctx);
+    pdq_sort2(p + 1, p + 5, cmp, ctx);
+    pdq_sort2(p + 2, p + 6, cmp, ctx);
+    pdq_sort2(p + 3, p + 7, cmp, ctx);
+
+    pdq_sort2(p, p + 1, cmp, ctx);
+    pdq_sort2(p + 2, p + 3, cmp, ctx);
+    pdq_sort2(p + 4, p + 5, cmp, ctx);
+    pdq_sort2(p + 6, p + 7, cmp, ctx);
+
+    pdq_sort2(p + 2, p + 4, cmp, ctx);
+    pdq_sort2(p + 3, p + 5, cmp, ctx);
+
+    pdq_sort2(p + 1, p + 4, cmp, ctx);
+    pdq_sort2(p + 3, p + 6, cmp, ctx);
+
+    pdq_sort2(p + 1, p + 2, cmp, ctx);
+    pdq_sort2(p + 3, p + 4, cmp, ctx);
+    pdq_sort2(p + 5, p + 6, cmp, ctx);
+}
+
+// replaces pdq_insertion_sort & pdq_unguarded_insertion_sort
+// guarded == true  -> leftmost partition (no sentinel before data.ptr)
+// guarded == false -> *(data.ptr - 1) <= every element, so the scan needs no bound check
+fn void pdq_small_sort(ElementType[] data, CmpFn cmp, Context ctx, bool guarded) @inline
+{
+    usz n = data.len;
+    if (n < 2) return;
+
+    ElementType* begin = data.ptr;
+    ElementType* end   = begin + n;
+    ElementType* cur   = begin + 1;
+
+    var $use_network = $Typeof(cmp) == sort::TypeNotSet &&& ElementType::size <= 16;
+    $if $use_network:
+        if (n >= 8)
+        {
+            pdq_sort8(begin, cmp, ctx);
+            cur = begin + 8;
+        }
+        else if (n >= 4)
+        {
+            pdq_sort4(begin, cmp, ctx);
+            cur = begin + 4;
+        }
+    $endif
+
+    for (; cur < end; cur++)
+    {
+        if (pdq_less(cmp, ctx, *cur, *(cur - 1)))
+        {
+            ElementType key   = *cur;
+            ElementType* hole = cur;
+            do
+            {
+                *hole = *(hole - 1);
+                hole--;
+            } while ((!guarded || hole > begin) && pdq_less(cmp, ctx, key, *(hole - 1)));
+            *hole = key;
+        }
+    }
+}
+
+//  pivot selection: median of 3, or ninther for big partitions; pivot ends at begin,
+//  min at begin+s2 and max at end-1 (these stoppers the unguarded scans rely on)
+fn void pdq_choose_pivot(ElementType* begin, usz size, CmpFn cmp, Context ctx) @inline
+{
+    usz s2            = size / 2;
+    ElementType* last = begin + size - 1;
+    if (size > NINTER_THRESHOLD)
+    {
+        pdq_sort3(begin, begin + s2, last, cmp, ctx);
+        pdq_sort3(begin + 1, begin + (s2 - 1), last - 1, cmp, ctx);
+        pdq_sort3(begin + 2, begin + (s2 + 1), last - 2, cmp, ctx);
+        pdq_sort3(begin + (s2 - 1), begin + s2, begin + (s2 + 1), cmp, ctx);
+        pdq_swap_elem(begin, begin + s2);
+    }
+    else
+    {
+        pdq_sort3(begin + s2, begin, last, cmp, ctx);
+    }
+}
+
 fn void pdqsort_loop(
     ElementType[] value,
     int bad_allowed,
@@ -612,31 +694,11 @@ fn void pdqsort_loop(
 
         if (size < INSERTION_SORT_THRESHOLD)
         {
-            if (leftmost)
-            {
-                pdq_insertion_sort(begin[0:size], cmp, ctx);
-            }
-            else
-            {
-                pdq_unguarded_insertion_sort(begin[0:size], cmp, ctx);
-            }
+            pdq_small_sort(begin[0:size], cmp, ctx, leftmost);
             return;
         }
 
-        usz s2 = size / 2;
-
-        if (size > NINTER_THRESHOLD)
-        {
-            pdq_sort3(begin, begin + s2, end - 1, cmp, ctx);
-            pdq_sort3(begin + 1, begin + (s2 - 1), end - 2, cmp, ctx);
-            pdq_sort3(begin + 2, begin + (s2 + 1), end - 3, cmp, ctx);
-            pdq_sort3(begin + (s2 - 1), begin + s2, begin + (s2 + 1), cmp, ctx);
-            pdq_swap_elem(begin, begin + s2);
-        }
-        else
-        {
-            pdq_sort3(begin + s2, begin, end - 1, cmp, ctx);
-        }
+        pdq_choose_pivot(begin, size, cmp, ctx);
 
         if (!leftmost && !pdq_less(cmp, ctx, *(begin - 1), *begin))
         {
@@ -662,7 +724,6 @@ fn void pdqsort_loop(
         if (highly_unbalanced)
         {
             bad_allowed--;
-
             if (bad_allowed <= 0)
             {
                 pdq_heap_sort(begin[0:size], cmp, ctx);
@@ -673,7 +734,6 @@ fn void pdqsort_loop(
             {
                 pdq_swap_elem(begin, begin + l_size / 4);
                 pdq_swap_elem(pivot_pos - 1, pivot_pos - (sz)(l_size / 4));
-
                 if (l_size > NINTER_THRESHOLD)
                 {
                     pdq_swap_elem(begin + 1, begin + (l_size / 4 + 1));
@@ -682,12 +742,10 @@ fn void pdqsort_loop(
                     pdq_swap_elem(pivot_pos - 3, pivot_pos - (sz)(l_size / 4 + 2));
                 }
             }
-
             if (r_size >= INSERTION_SORT_THRESHOLD)
             {
                 pdq_swap_elem(pivot_pos + 1, pivot_pos + (1 + r_size / 4));
                 pdq_swap_elem(end - 1, end - (sz)(r_size / 4));
-
                 if (r_size > NINTER_THRESHOLD)
                 {
                     pdq_swap_elem(pivot_pos + 2, pivot_pos + (2 + r_size / 4));
@@ -697,16 +755,13 @@ fn void pdqsort_loop(
                 }
             }
         }
-        else
+        else if (already_partitioned && pdq_partial_insertion_sort(
+            begin[0:l_size],
+            cmp,
+            ctx
+        ) && pdq_partial_insertion_sort((pivot_pos + 1)[0:r_size], cmp, ctx))
         {
-            if (already_partitioned && pdq_partial_insertion_sort(
-                begin[0:l_size],
-                cmp,
-                ctx
-            ) && pdq_partial_insertion_sort((pivot_pos + 1)[0:r_size], cmp, ctx))
-            {
-                return;
-            }
+            return;
         }
 
         pdqsort_loop(begin[0:l_size], bad_allowed, leftmost, branchless, cmp, ctx);
