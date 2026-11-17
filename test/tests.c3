@@ -627,3 +627,30 @@ fn void test_forced_heapsort_fallback() @test
 //         };
 //     }
 // }
+
+fn void test_network_01_principle() @test
+{
+    // pdq_sort8: all 256 patterns of 0/1
+    for (uint m = 0; m < 256; m++)
+    {
+        int[8] a;
+        for (usz i = 0; i < 8; i++) a[i] = (int)((m >> i) & 1);
+        sort::pdqsort(a[..]);
+        for (usz i = 1; i < 8; i++)
+        {
+            assert(a[i - 1] <= a[i], "sort8 failed on pattern %d", m);
+        }
+    }
+
+    // pdq_sort4: all 16 patterns
+    for (uint m = 0; m < 16; m++)
+    {
+        int[4] a;
+        for (usz i = 0; i < 4; i++) a[i] = (int)((m >> i) & 1);
+        sort::pdqsort(a[..]);
+        for (usz i = 1; i < 4; i++)
+        {
+            assert(a[i - 1] <= a[i], "sort4 failed on pattern %d", m);
+        }
+    }
+}

@@ -112,16 +112,6 @@ fn int[] get_bench_data(int pattern)
     }
 }
 
-fn uint checksum(int[] data)
-{
-    uint hash = 0;
-    for (sz i = 0; i < data.len; i++)
-    {
-        hash = hash * 31 + (uint)data[i];
-    }
-    return hash;
-}
-
 fn void run_sort_benchmark(int pattern, int algorithm, sz n)
 {
     ensure_init();
@@ -140,7 +130,7 @@ fn void run_sort_benchmark(int pattern, int algorithm, sz n)
             break;
     }
 
-    bench_sink = checksum(data);
+    bench_sink = (uint)data[0] + (uint)data[n - 1];
 }
 
 fn bool is_sorted(int[] data)

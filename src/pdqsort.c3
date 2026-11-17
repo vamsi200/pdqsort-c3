@@ -151,54 +151,6 @@ fn void pdq_swap_offsets(
     }
 }
 
-// fn void pdq_insertion_sort(ElementType[] data, CmpFn cmp, Context ctx) @inline
-// {
-//     ElementType* begin = data.ptr;
-//     ElementType* end   = begin + data.len;
-//     if (begin == end) return;
-// 
-//     for (ElementType* current = begin + 1; current < end; current++)
-//     {
-//         if (pdq_less(cmp, ctx, *current, *(current - 1)))
-//         {
-//             ElementType key   = *current;
-//             ElementType* hole = current;
-// 
-//             do
-//             {
-//                 *hole = *(hole - 1);
-//                 hole--;
-//             } while (hole > begin && pdq_less(cmp, ctx, key, *(hole - 1)));
-// 
-//             *hole = key;
-//         }
-//     }
-// }
-// 
-// fn void pdq_unguarded_insertion_sort(ElementType[] data, CmpFn cmp, Context ctx) @inline
-// {
-//     ElementType* begin = data.ptr;
-//     ElementType* end   = begin + data.len;
-//     if (begin == end) return;
-// 
-//     for (ElementType* current = begin + 1; current < end; current++)
-//     {
-//         if (pdq_less(cmp, ctx, *current, *(current - 1)))
-//         {
-//             ElementType key   = *current;
-//             ElementType* hole = current;
-// 
-//             do
-//             {
-//                 *hole = *(hole - 1);
-//                 hole--;
-//             } while (pdq_less(cmp, ctx, key, *(hole - 1)));
-// 
-//             *hole = key;
-//         }
-//     }
-// }
-
 fn bool pdq_partial_insertion_sort(ElementType[] data, CmpFn cmp, Context ctx) @inline
 {
     ElementType* begin = data.ptr;
@@ -657,7 +609,7 @@ fn void pdq_small_sort(ElementType[] data, CmpFn cmp, Context ctx, bool guarded)
 }
 
 //  pivot selection: median of 3, or ninther for big partitions; pivot ends at begin,
-//  min at begin+s2 and max at end-1 (these stoppers the unguarded scans rely on)
+//  min at begin+s2 and max at end-1 (these stoppers - the unguarded scans rely on)
 fn void pdq_choose_pivot(ElementType* begin, usz size, CmpFn cmp, Context ctx) @inline
 {
     usz s2            = size / 2;
