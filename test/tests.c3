@@ -1,25 +1,29 @@
 import std::sort;
 import std::collections::list;
 
-// fn void test_partition_right() @test
-// {
-//     int[] a = { 4, 2, 7, 1, 6, 3, 5 };
-//
-//     PartitionResult result = sort::partition_right(a);
-//
-//     usz pivot_index = (usz)(result.ptr - a.ptr);
-//     int pivot       = a[pivot_index];
-//
-//     for (usz i = 0; i < pivot_index; i++)
-//     {
-//         assert(a[i] < pivot);
-//     }
-//
-//     for (usz i = pivot_index + 1; i < a.len; i++)
-//     {
-//         assert(a[i] >= pivot);
-//     }
-// }
+struct Big
+{
+    long key;
+    long a;
+    long b;
+    long c;
+}
+
+const usz[*] TEST_SIZES = {
+    0, 1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 23, 24, 25, 31, 32, 33,
+    63, 64, 65, 100, 127, 128, 129, 200, 500, 1000, 3000, 5000
+};
+const int NUM_PATTERNS  = 7;
+const usz MAX_N         = 5000;
+
+int[MAX_N] t_int;
+int[MAX_N] t_ref;
+float[MAX_N] t_f32;
+float[MAX_N] t_f32_ref;
+double[MAX_N] t_f64;
+double[MAX_N] t_f64_ref;
+
+Big[MAX_N] t_big;
 
 fn void test_sort_empty() @test
 {
@@ -610,47 +614,257 @@ fn void test_forced_heapsort_fallback() @test
     }
 }
 
-// fn void test_heap_sort_direct() @test
-// {
-//     uint rng = 0x0BADF00D;
-//     for (usz n = 0; n < 200; n++)
-//     {
-//         @pool()
-//         {
-//             int[] data     = alloc::new_array(tmem, int, (sz)n);
-//             int[] expected = alloc::new_array(tmem, int, (sz)n);
-//             fill_pattern(data, 0, &rng);
-//             for (usz i = 0; i < n; i++) expected[i] = data[i];
-//             reference_sort(expected);
-//             sort::heap_sort(data);
-//             for (usz i = 0; i < n; i++) assert(data[i] == expected[i]);
-//         };
-//     }
-// }
-
-fn void test_network_01_principle() @test
+fn int gen_val(int pattern, usz i, usz n, uint* s)
 {
-    // pdq_sort8: all 256 patterns of 0/1
+    uint r = next_rand(s);
+    switch (pattern)
+    {
+        case 0: return (int)r;
+        case 1: return (int)i;
+        case 2: return (int)(n - i);
+        case 3: return 42;
+        case 4: return (int)(r % 4) - 2;
+        case 5: return (int)(i % 17);
+        default: return (int)i - (int)((i % 13 == 0) ? 5 : 0);
+    }
+}
+
+macro void ref_sort(slice)
+{
+    for (usz i = 1; i < slice.len; i++)
+    {
+        var key = slice[i];
+        usz j = i;
+        while (j > 0 && slice[j - 1] > key)
+        {
+            slice[j] = slice[j - 1];
+            j--;
+        }
+        slice[j] = key;
+    }
+}
+
+fn int cmp_int_t(int* x, int* y)
+{
+    return *x < *y ? -1 : (*x > *y ? 1 : 0);
+}
+
+fn int cmp_big(Big* x, Big* y)
+{
+    return x.key < y.key ? -1 : (x.key > y.key ? 1 : 0);
+}
+
+fn void test_branchless_int_no_cmp() @test
+{
+    foreach (n : TEST_SIZES)
+    {
+        for (int p = 0; p < NUM_PATTERNS; p++)
+        {
+            uint s = 0x12345678 + (uint)n;
+            for (usz i = 0; i < n; i++) t_int[i] = t_ref[i] = gen_val(p, i, n, &s);
+            ref_sort(t_ref[:n]);
+            sort::pdqsort_branchless(t_int[:n]);
+            for (usz i = 0; i < n; i++)
+            {
+                assert(t_int[i] == t_ref[i], "branchless int: n=%d pattern=%d idx=%d", n, p, i);
+            }
+        }
+    }
+}
+
+fn void test_pdqsort_int_with_cmp() @test
+{
+    foreach (n : TEST_SIZES)
+    {
+        for (int p = 0; p < NUM_PATTERNS; p++)
+        {
+            uint s = 0xABCDEF01 + (uint)n;
+            for (usz i = 0; i < n; i++) t_int[i] = t_ref[i] = gen_val(p, i, n, &s);
+            ref_sort(t_ref[:n]);
+            sort::pdqsort(t_int[:n], &cmp_int_t);
+            for (usz i = 0; i < n; i++)
+            {
+                assert(t_int[i] == t_ref[i], "int+cmp: n=%d pattern=%d idx=%d", n, p, i);
+            }
+        }
+    }
+}
+
+fn void test_branchless_int_with_cmp() @test
+{
+    foreach (n : TEST_SIZES)
+    {
+        for (int p = 0; p < NUM_PATTERNS; p++)
+        {
+            uint s = 0x0F0F0F0F + (uint)n;
+            for (usz i = 0; i < n; i++) t_int[i] = t_ref[i] = gen_val(p, i, n, &s);
+            ref_sort(t_ref[:n]);
+            sort::pdqsort_branchless(t_int[:n], &cmp_int_t);
+            for (usz i = 0; i < n; i++)
+            {
+                assert(t_int[i] == t_ref[i], "branchless int+cmp: n=%d pattern=%d idx=%d", n, p, i);
+            }
+        }
+    }
+}
+
+// 32-byte struct (comparator, no network, both entry points)
+fn void check_big(usz n, int p, bool branchless)
+{
+    uint s = 0x13572468 + (uint)n;
+    for (usz i = 0; i < n; i++)
+    {
+        int v = gen_val(p, i, n, &s);
+        t_big[i] = { (long)v, (long)v * 3, -(long)v, (long)i };
+        t_ref[i] = v;
+    }
+    ref_sort(t_ref[:n]);
+
+    if (branchless)
+    {
+        sort::pdqsort_branchless(t_big[:n], &cmp_big);
+    }
+    else
+    {
+        sort::pdqsort(t_big[:n], &cmp_big);
+    }
+
+    for (usz i = 0; i < n; i++)
+    {
+        assert(t_big[i].key == (long)t_ref[i], "Big: key mismatch n=%d pattern=%d idx=%d", n, p, i);
+        assert(t_big[i].a == t_big[i].key * 3
+            && t_big[i].b
+                == -t_big[i].key, "Big: payload corrupted n=%d pattern=%d idx=%d", n, p, i);
+    }
+}
+
+fn void test_big_struct_both_entry_points() @test
+{
+    foreach (n : TEST_SIZES)
+    {
+        for (int p = 0; p < NUM_PATTERNS; p++)
+        {
+            check_big(n, p, false);
+            check_big(n, p, true);
+        }
+    }
+}
+
+// float / double (branchless + network paths)
+
+fn void test_float_sort() @test
+{
+    foreach (n : TEST_SIZES)
+    {
+        for (int p = 0; p < NUM_PATTERNS; p++)
+        {
+            uint s = 0x2468ACE0 + (uint)n;
+            for (usz i = 0; i < n; i++)
+            {
+                float v = (float)(gen_val(p, i, n, &s) % 100000) * 0.25f;
+                t_f32[i] = t_f32_ref[i] = v;
+            }
+            ref_sort(t_f32_ref[:n]);
+            sort::pdqsort(t_f32[:n]);
+            for (usz i = 0; i < n; i++)
+            {
+                assert(t_f32[i] == t_f32_ref[i], "float: n=%d pattern=%d idx=%d", n, p, i);
+            }
+        }
+    }
+}
+
+fn void test_double_sort() @test
+{
+    foreach (n : TEST_SIZES)
+    {
+        for (int p = 0; p < NUM_PATTERNS; p++)
+        {
+            uint s = 0x7F7F7F7F + (uint)n;
+            for (usz i = 0; i < n; i++)
+            {
+                double v = (double)gen_val(p, i, n, &s) * 0.5;
+                t_f64[i] = t_f64_ref[i] = v;
+            }
+            ref_sort(t_f64_ref[:n]);
+            sort::pdqsort(t_f64[:n]);
+            for (usz i = 0; i < n; i++)
+            {
+                assert(t_f64[i] == t_f64_ref[i], "double: n=%d pattern=%d idx=%d", n, p, i);
+            }
+        }
+    }
+}
+
+fn void test_float_branchless_forced() @test
+{
+    uint s = 0x55AA55AA;
+    for (usz n = 0; n < 300; n++)
+    {
+        for (usz i = 0; i < n; i++)
+        {
+            float v = (float)((int)next_rand(&s) % 1000) * 0.5f;
+            t_f32[i] = t_f32_ref[i] = v;
+        }
+        ref_sort(t_f32_ref[:n]);
+        sort::pdqsort_branchless(t_f32[:n]);
+        for (usz i = 0; i < n; i++)
+        {
+            assert(t_f32[i] == t_f32_ref[i], "float branchless: n=%d idx=%d", n, i);
+        }
+    }
+}
+
+// 0-1 principle tests for the sorting networks
+fn void test_network_01_int() @test
+{
     for (uint m = 0; m < 256; m++)
     {
         int[8] a;
         for (usz i = 0; i < 8; i++) a[i] = (int)((m >> i) & 1);
         sort::pdqsort(a[..]);
-        for (usz i = 1; i < 8; i++)
-        {
-            assert(a[i - 1] <= a[i], "sort8 failed on pattern %d", m);
-        }
+        for (usz i = 1; i < 8; i++) assert(a[i - 1] <= a[i], "int sort8 failed, pattern %d", m);
     }
-
-    // pdq_sort4: all 16 patterns
     for (uint m = 0; m < 16; m++)
     {
         int[4] a;
         for (usz i = 0; i < 4; i++) a[i] = (int)((m >> i) & 1);
         sort::pdqsort(a[..]);
-        for (usz i = 1; i < 4; i++)
-        {
-            assert(a[i - 1] <= a[i], "sort4 failed on pattern %d", m);
-        }
+        for (usz i = 1; i < 4; i++) assert(a[i - 1] <= a[i], "int sort4 failed, pattern %d", m);
+    }
+}
+
+fn void test_network_01_float() @test
+{
+    for (uint m = 0; m < 256; m++)
+    {
+        float[8] a;
+        for (usz i = 0; i < 8; i++) a[i] = (float)((m >> i) & 1);
+        sort::pdqsort(a[..]);
+        for (usz i = 1; i < 8; i++) assert(a[i - 1] <= a[i], "float sort8 failed, pattern %d", m);
+    }
+    for (uint m = 0; m < 16; m++)
+    {
+        float[4] a;
+        for (usz i = 0; i < 4; i++) a[i] = (float)((m >> i) & 1);
+        sort::pdqsort(a[..]);
+        for (usz i = 1; i < 4; i++) assert(a[i - 1] <= a[i], "float sort4 failed, pattern %d", m);
+    }
+}
+
+fn void test_network_01_double_and_branchless() @test
+{
+    for (uint m = 0; m < 256; m++)
+    {
+        double[8] a;
+        for (usz i = 0; i < 8; i++) a[i] = (double)((m >> i) & 1);
+        sort::pdqsort(a[..]);
+        for (usz i = 1; i < 8; i++) assert(a[i - 1] <= a[i], "double sort8 failed, pattern %d", m);
+
+        int[8] b;
+        for (usz i = 0; i < 8; i++) b[i] = (int)((m >> i) & 1);
+        sort::pdqsort_branchless(b[..]);
+        for (usz i = 1; i < 8; i++) assert(b[i
+            - 1] <= b[i], "branchless sort8 failed, pattern %d", m);
     }
 }

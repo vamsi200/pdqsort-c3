@@ -7,7 +7,7 @@ fn int log2(usz n) @inline
 
 <*
  Sort list using pattern-defeating quicksort (pdqsort).
- Uses the branchless partition by default for integer types without a comparator.
+ Uses the branchless partition automatically for integer and float types without a comparator.
 
  @require @list_is_by_ref(list) : "Expected a list passed by reference or be a slice"
  @require @is_sortable(list) : "The list must be indexable and support .len or .len()"
@@ -20,7 +20,8 @@ macro void pdqsort(list, cmp = ..., context = ...) @builtin
     var used_ctx = $defined(context) ??? context : (TypeNotSet)null;
     $if @kindof(list) == SLICE:
         var $branchless = $Typeof(used_cmp) == TypeNotSet
-            &&& ($Typeof(list[0])::kind == SIGNED_INT ||| $Typeof(list[0])::kind == UNSIGNED_INT);
+            &&& ($Typeof(list[0])::kind == SIGNED_INT ||| $Typeof(list[0])::kind == UNSIGNED_INT
+                ||| $Typeof(list[0])::kind == FLOAT);
         pdqsort_with{$Typeof(list), $Typeof(used_cmp), $Typeof(used_ctx)}(
             list,
             $branchless,
@@ -31,11 +32,45 @@ macro void pdqsort(list, cmp = ..., context = ...) @builtin
     $else
         var $branchless = $Typeof(used_cmp) == TypeNotSet
             &&& ($Typeof((*list)[0])::kind == SIGNED_INT
-                ||| $Typeof((*list)[0])::kind == UNSIGNED_INT);
+                ||| $Typeof((*list)[0])::kind == UNSIGNED_INT
+                ||| $Typeof((*list)[0])::kind == FLOAT);
         var slice = (*list)[..];
         pdqsort_with{$Typeof(*list), $Typeof(used_cmp), $Typeof(used_ctx)}(
             slice,
             $branchless,
+            log2(slice.len),
+            used_cmp,
+            used_ctx
+        );
+    $endif
+}
+
+<*
+ Same as pdqsort, but uses the branchless partition, for any element type and comparator.
+ Worth it for cheap comparators; for expensive ones the regular partition is usually faster.
+
+ @require @list_is_by_ref(list) : "Expected a list passed by reference or be a slice"
+ @require @is_sortable(list) : "The list must be indexable and support .len or .len()"
+ @require @is_valid_cmp_fn(#cmp: ...cmp, #list: list, #context: ...context) : "Expected a comparison function which compares values"
+ @require @is_valid_context(...cmp, ...context) : "Expected a valid context"
+*>
+macro void pdqsort_branchless(list, cmp = ..., context = ...) @builtin
+{
+    var used_cmp = $defined(cmp) ??? cmp : (TypeNotSet)null;
+    var used_ctx = $defined(context) ??? context : (TypeNotSet)null;
+    $if @kindof(list) == SLICE:
+        pdqsort_with{$Typeof(list), $Typeof(used_cmp), $Typeof(used_ctx)}(
+            list,
+            true,
+            log2(list.len),
+            used_cmp,
+            used_ctx
+        );
+    $else
+        var slice = (*list)[..];
+        pdqsort_with{$Typeof(*list), $Typeof(used_cmp), $Typeof(used_ctx)}(
+            slice,
+            true,
             log2(slice.len),
             used_cmp,
             used_ctx
@@ -202,7 +237,7 @@ fn void pdq_sift_down(ElementType* begin, usz root, usz end, CmpFn cmp, Context 
     }
 }
 
-fn void pdq_heap_sort(ElementType[] data, CmpFn cmp, Context ctx)
+fn void pdq_heap_sort(ElementType[] data, CmpFn cmp, Context ctx) @builtin
 {
     ElementType* begin = data.ptr;
     usz n              = data.len;
@@ -434,7 +469,7 @@ fn PartitionResult partition_right_branchless(ElementType[] value, CmpFn cmp, Co
 
 <*
  @require value.len >= INSERTION_SORT_THRESHOLD : "Partitioning is only valid past the insertion sort threshold"
- @require !pdq_less(cmp, ctx, value[value.len - 1], value[0]) : "Last element must not be smaller than the pivot (sentinel for the unguarded scan)"
+ @require !pdq_less(cmp, ctx, value[value.len - 1], value[0]) || !pdq_less(cmp, ctx, value[value.len / 2 + 1], value[0]) : "Pivot must be a median of at least three elements (a stopper at end - 1 or at mid + 1 must not be smaller)"
 *>
 fn PartitionResult partition_right(ElementType[] value, CmpFn cmp, Context ctx) @inline
 {

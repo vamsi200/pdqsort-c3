@@ -112,6 +112,11 @@ fn int[] get_bench_data(int pattern)
     }
 }
 
+fn int cmp_int(int* a, int* b)
+{
+    return *a < *b ? -1 : (*a > *b ? 1 : 0);
+}
+
 fn void run_sort_benchmark(int pattern, int algorithm, sz n)
 {
     ensure_init();
@@ -125,7 +130,7 @@ fn void run_sort_benchmark(int pattern, int algorithm, sz n)
         case 0:
             sort::pdqsort(data);
         case 1:
-            sort::pdqsort(data);
+            sort::pdqsort_branchless(data);
         default:
             break;
     }
