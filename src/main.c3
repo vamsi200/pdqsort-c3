@@ -6,28 +6,28 @@ import std::time;
 
 macro int[] make_array(Allocator allocator, int n)
 {
-    List{int} k;
-    while (k.len() < n)
-    {
-        int val = random::rand(n);
-        k.push(val);
-    }
-    return k.to_array(allocator);
+	List{int} k;
+	while (k.len() < n)
+	{
+		int val = random::rand(n);
+		k.push(val);
+	}
+	return k.to_array(allocator);
 }
 
 fn int main(String[] args) => @pool()
 {
-    int[] original = make_array(tmem, 9);
+	int[] original = make_array(tmem, 9);
 
-    io::printfn("Before:");
-    io::printn(original);
+	io::printfn("Before:");
+	io::printn(original);
 
-    pdqsort(original);
+	pdqsort(original);
 
-    io::printfn("After:");
-    io::printn(original);
+	io::printfn("After:");
+	io::printn(original);
 
-    return 0;
+	return 0;
 }
 
 const BENCH_SIZE = 9999;
@@ -43,108 +43,109 @@ int[BENCH_SIZE] bench_work;
 uint bench_sink;
 bool bench_ready;
 
-macro void swap_int(int* a, int* b) {
-    int tmp = *a;
-    *a = *b;
-    *b = tmp;
+macro void swap_int(int* a, int* b)
+{
+	int tmp = *a;
+	*a = *b;
+	*b = tmp;
 }
 
 fn void fill_bench_data(int[] data, int pattern)
 {
-    uint state = 0x12345678;
+	uint state = 0x12345678;
 
-    for (sz i = 0; i < data.len; i++)
-    {
-        state ^= state << 13;
-        state ^= state >> 17;
-        state ^= state << 5;
+	for (sz i = 0; i < data.len; i++)
+	{
+		state ^= state << 13;
+		state ^= state >> 17;
+		state ^= state << 5;
 
-        switch (pattern)
-        {
-            case 0: data[i] = (int)(state & 0x7FFFFFFF);
-            case 1: data[i] = (int)i;
-            case 2: data[i] = (int)(data.len - i);
-            case 3: data[i] = 42;
-            case 4: data[i] = (int)(state % 16) - 8;
-            case 5: data[i] = (int)i;
-        }
-    }
+		switch (pattern)
+		{
+			case 0: data[i] = (int)(state & 0x7FFFFFFF);
+			case 1: data[i] = (int)i;
+			case 2: data[i] = (int)(data.len - i);
+			case 3: data[i] = 42;
+			case 4: data[i] = (int)(state % 16) - 8;
+			case 5: data[i] = (int)i;
+		}
+	}
 
-    if (pattern == 5)
-    {
-        for (sz i = 0; i + 1 < data.len; i += 97)
-        {
-            swap_int(&data[i], &data[i + 1]);
-        }
-    }
+	if (pattern == 5)
+	{
+		for (sz i = 0; i + 1 < data.len; i += 97)
+		{
+			swap_int(&data[i], &data[i + 1]);
+		}
+	}
 }
 
 fn void init_bench_data()
 {
-    fill_bench_data(bench_random[..], 0);
-    fill_bench_data(bench_sorted[..], 1);
-    fill_bench_data(bench_reverse[..], 2);
-    fill_bench_data(bench_equal[..], 3);
-    fill_bench_data(bench_duplicates[..], 4);
-    fill_bench_data(bench_nearly_sorted[..], 5);
+	fill_bench_data(bench_random[..], 0);
+	fill_bench_data(bench_sorted[..], 1);
+	fill_bench_data(bench_reverse[..], 2);
+	fill_bench_data(bench_equal[..], 3);
+	fill_bench_data(bench_duplicates[..], 4);
+	fill_bench_data(bench_nearly_sorted[..], 5);
 }
 
 fn void ensure_init()
 {
-    if (!bench_ready)
-    {
-        init_bench_data();
-        bench_ready = true;
-    }
+	if (!bench_ready)
+	{
+		init_bench_data();
+		bench_ready = true;
+	}
 }
 
 fn int[] get_bench_data(int pattern)
 {
-    switch (pattern)
-    {
-        case 0: return bench_random[..];
-        case 1: return bench_sorted[..];
-        case 2: return bench_reverse[..];
-        case 3: return bench_equal[..];
-        case 4: return bench_duplicates[..];
-        case 5: return bench_nearly_sorted[..];
-        default: return bench_random[..];
-    }
+	switch (pattern)
+	{
+		case 0: return bench_random[..];
+		case 1: return bench_sorted[..];
+		case 2: return bench_reverse[..];
+		case 3: return bench_equal[..];
+		case 4: return bench_duplicates[..];
+		case 5: return bench_nearly_sorted[..];
+		default: return bench_random[..];
+	}
 }
 
 fn int cmp_int(int* a, int* b)
 {
-    return *a < *b ? -1 : (*a > *b ? 1 : 0);
+	return *a < *b ? -1 : (*a > *b ? 1 : 0);
 }
 
 fn void run_sort_benchmark(int pattern, int algorithm, sz n)
 {
-    ensure_init();
+	ensure_init();
 
-    int[] original = get_bench_data(pattern);
-    int[] data     = bench_work[:n];
-    data[..] = original[:n];
+	int[] original = get_bench_data(pattern);
+	int[] data     = bench_work[:n];
+	data[..] = original[:n];
 
-    switch (algorithm)
-    {
-        case 0:
-            sort::pdqsort(data);
-        case 1:
-            sort::pdqsort_branchless(data);
-        default:
-            break;
-    }
+	switch (algorithm)
+	{
+		case 0:
+			sort::pdqsort(data);
+		case 1:
+			sort::pdqsort_branchless(data);
+		default:
+			break;
+	}
 
-    bench_sink = (uint)data[0] + (uint)data[n - 1];
+	bench_sink = (uint)data[0] + (uint)data[n - 1];
 }
 
 fn bool is_sorted(int[] data)
 {
-    for (sz i = 1; i < data.len; i++)
-    {
-        if (data[i - 1] > data[i]) return false;
-    }
-    return true;
+	for (sz i = 1; i < data.len; i++)
+	{
+		if (data[i - 1] > data[i]) return false;
+	}
+	return true;
 }
 
 fn void bench_pdq_random() @benchmark => run_sort_benchmark(0, 0, BENCH_SIZE);
