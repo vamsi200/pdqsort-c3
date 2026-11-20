@@ -1,4 +1,82 @@
-module std::sort;
+module pdqsort;
+
+typedef TypeNotSet @private = void*;
+
+macro bool @list_is_by_ref(#list) @const
+{
+	return @kindof(#list) == SLICE ||| (@kindof(#list) == POINTER &&& @kindof(*#list) != SLICE);
+}
+
+<*
+ @require @list_is_by_ref(#list) : "Expected the list to be passed by ref or be a slice"
+*>
+macro bool @is_sortable(#list) @const
+{
+	$switch:
+		$case @kindof(#list) == SLICE:
+			return true;
+		$case !$defined(*#list):
+			return false;
+		$case !$defined((*#list)[0]):
+			return false;
+		$case !$defined(lengthof (*#list)):
+			return false;
+		$case $defined(&(*#list)[0]) &&& $Typeof(&(*#list)[0]) != $Typeof((*#list)[0])*:
+			return false;
+		$default:
+			return true;
+	$endswitch
+}
+
+macro bool @is_valid_context(#cmp = ..., #context = ...)
+{
+	return $defined(#cmp) || !$defined(#context);
+}
+
+<*
+ @require @list_is_by_ref(#list) : "Expected the list to be passed by ref or be a slice"
+*>
+macro bool @is_valid_cmp_fn(#cmp = ..., #list = ..., #context = ...) @const
+{
+	$if !$defined(#cmp):
+		return true;
+	$else
+		var $Type = $Typeof(#cmp);
+		var $no_context = !$defined(#context);
+		$switch:
+			$case $Type::kind != FUNC ||| $Type::returns.kind != SIGNED_INT:
+				return false;
+			$default:
+				$if @kindof(#list) == SLICE:
+					$switch:
+						$case $defined(#cmp((#list)[0], (#list)[0], #context)):
+							return true;
+						$case $defined(#cmp((#list)[0], (#list)[0])):
+							return $no_context;
+						$case $defined(#cmp(&(#list)[0], &(#list)[0], #context)):
+							return true;
+						$case $defined(#cmp(&(#list)[0], &(#list)[0])):
+							return $no_context;
+						$default:
+							return false;
+					$endswitch
+				$else
+					$switch:
+						$case $defined(#cmp((*#list)[0], (*#list)[0], #context)):
+							return true;
+						$case $defined(#cmp((*#list)[0], (*#list)[0])):
+							return $no_context;
+						$case $defined(#cmp(&(*#list)[0], &(*#list)[0], #context)):
+							return true;
+						$case $defined(#cmp(&(*#list)[0], &(*#list)[0])):
+							return $no_context;
+						$default:
+							return false;
+					$endswitch
+				$endif
+		$endswitch
+	$endif
+}
 
 fn int log2(usz n) @inline
 {
@@ -18,10 +96,12 @@ macro void pdqsort(list, cmp = ..., context = ...) @builtin
 {
 	var used_cmp = $defined(cmp) ??? cmp : (TypeNotSet)null;
 	var used_ctx = $defined(context) ??? context : (TypeNotSet)null;
+
 	$if @kindof(list) == SLICE:
 		var $branchless = $Typeof(used_cmp) == TypeNotSet
 			&&& ($Typeof(list[0])::kind == SIGNED_INT ||| $Typeof(list[0])::kind == UNSIGNED_INT
 				||| $Typeof(list[0])::kind == FLOAT);
+
 		pdqsort_with{$Typeof(list), $Typeof(used_cmp), $Typeof(used_ctx)}(
 			list,
 			$branchless,
@@ -34,7 +114,9 @@ macro void pdqsort(list, cmp = ..., context = ...) @builtin
 			&&& ($Typeof((*list)[0])::kind == SIGNED_INT
 				||| $Typeof((*list)[0])::kind == UNSIGNED_INT
 				||| $Typeof((*list)[0])::kind == FLOAT);
+
 		var slice = (*list)[..];
+
 		pdqsort_with{$Typeof(*list), $Typeof(used_cmp), $Typeof(used_ctx)}(
 			slice,
 			$branchless,
@@ -46,7 +128,7 @@ macro void pdqsort(list, cmp = ..., context = ...) @builtin
 }
 
 <*
- Same as pdqsort, but uses the branchless partition, for any element type and comparator.
+ Same as pdqsort, but uses the branchless partition for any element type and comparator.
  Worth it for cheap comparators; for expensive ones the regular partition is usually faster.
 
  @require @list_is_by_ref(list) : "Expected a list passed by reference or be a slice"
@@ -58,6 +140,7 @@ macro void pdqsort_branchless(list, cmp = ..., context = ...) @builtin
 {
 	var used_cmp = $defined(cmp) ??? cmp : (TypeNotSet)null;
 	var used_ctx = $defined(context) ??? context : (TypeNotSet)null;
+
 	$if @kindof(list) == SLICE:
 		pdqsort_with{$Typeof(list), $Typeof(used_cmp), $Typeof(used_ctx)}(
 			list,
@@ -68,6 +151,7 @@ macro void pdqsort_branchless(list, cmp = ..., context = ...) @builtin
 		);
 	$else
 		var slice = (*list)[..];
+
 		pdqsort_with{$Typeof(*list), $Typeof(used_cmp), $Typeof(used_ctx)}(
 			slice,
 			true,
@@ -78,7 +162,12 @@ macro void pdqsort_branchless(list, cmp = ..., context = ...) @builtin
 	$endif
 }
 
-module std::sort <Type, CmpFn, Context> @private;
+// Generic implementation
+module pdqsort <Type, CmpFn, Context> @private;
+
+alias ElementType = $Typeof(((Type) { })[0]);
+const bool IS_SLICE = Type::kind == SLICE;
+alias ListType = IS_SLICE ??? Type : Type*;
 
 const int INSERTION_SORT_THRESHOLD     = 24;
 const int NINTER_THRESHOLD             = 128;
@@ -94,9 +183,10 @@ struct PartitionResult @private
 
 macro bool pdq_less(CmpFn cmp, Context ctx, ElementType a, ElementType b)
 {
-	var $has_cmp = $Typeof(cmp) != sort::TypeNotSet;
-	var $has_ctx = $Typeof(ctx) != sort::TypeNotSet;
+	var $has_cmp = $Typeof(cmp) != TypeNotSet;
+	var $has_ctx = $Typeof(ctx) != TypeNotSet;
 	var $by_value = $has_cmp &&& $defined($Typefrom(CmpFn::params[0].type) v = a);
+
 	$switch:
 		$case $by_value && $has_ctx:
 			return cmp(a, b, ctx) < 0;
@@ -193,23 +283,27 @@ fn bool pdq_partial_insertion_sort(ElementType[] data, CmpFn cmp, Context ctx) @
 	if (begin == end) return true;
 
 	usz limit = 0;
+
 	for (ElementType* current = begin + 1; current < end; current++)
 	{
 		if (pdq_less(cmp, ctx, *current, *(current - 1)))
 		{
 			ElementType key   = *current;
 			ElementType* hole = current;
+
 			do
 			{
 				*hole = *(hole - 1);
 				hole--;
 			} while (hole > begin && pdq_less(cmp, ctx, key, *(hole - 1)));
+
 			*hole = key;
 			limit += (usz)(current - hole);
 
 			if (limit > PARTIAL_INSERTION_SORT_LIMIT) return false;
 		}
 	}
+
 	return true;
 }
 
@@ -245,6 +339,7 @@ fn void pdq_heap_sort(ElementType[] data, CmpFn cmp, Context ctx) @builtin
 	if (n < 2) return;
 
 	usz start = n / 2;
+
 	while (start > 0)
 	{
 		start--;
@@ -252,9 +347,11 @@ fn void pdq_heap_sort(ElementType[] data, CmpFn cmp, Context ctx) @builtin
 	}
 
 	usz end = n;
+
 	while (end > 1)
 	{
 		end--;
+
 		ElementType tmp = begin[0];
 		begin[0] = begin[end];
 		begin[end] = tmp;
@@ -327,24 +424,31 @@ fn PartitionResult partition_right_branchless(ElementType[] value, CmpFn cmp, Co
 					offsets_l[num_l] = i++;
 					num_l += (usz)(!pdq_less(cmp, ctx, *first, pivot));
 					first++;
+
 					offsets_l[num_l] = i++;
 					num_l += (usz)(!pdq_less(cmp, ctx, *first, pivot));
 					first++;
+
 					offsets_l[num_l] = i++;
 					num_l += (usz)(!pdq_less(cmp, ctx, *first, pivot));
 					first++;
+
 					offsets_l[num_l] = i++;
 					num_l += (usz)(!pdq_less(cmp, ctx, *first, pivot));
 					first++;
+
 					offsets_l[num_l] = i++;
 					num_l += (usz)(!pdq_less(cmp, ctx, *first, pivot));
 					first++;
+
 					offsets_l[num_l] = i++;
 					num_l += (usz)(!pdq_less(cmp, ctx, *first, pivot));
 					first++;
+
 					offsets_l[num_l] = i++;
 					num_l += (usz)(!pdq_less(cmp, ctx, *first, pivot));
 					first++;
+
 					offsets_l[num_l] = i++;
 					num_l += (usz)(!pdq_less(cmp, ctx, *first, pivot));
 					first++;
@@ -367,24 +471,31 @@ fn PartitionResult partition_right_branchless(ElementType[] value, CmpFn cmp, Co
 					offsets_r[num_r] = ++i;
 					last--;
 					num_r += (usz)pdq_less(cmp, ctx, *last, pivot);
+
 					offsets_r[num_r] = ++i;
 					last--;
 					num_r += (usz)pdq_less(cmp, ctx, *last, pivot);
+
 					offsets_r[num_r] = ++i;
 					last--;
 					num_r += (usz)pdq_less(cmp, ctx, *last, pivot);
+
 					offsets_r[num_r] = ++i;
 					last--;
 					num_r += (usz)pdq_less(cmp, ctx, *last, pivot);
+
 					offsets_r[num_r] = ++i;
 					last--;
 					num_r += (usz)pdq_less(cmp, ctx, *last, pivot);
+
 					offsets_r[num_r] = ++i;
 					last--;
 					num_r += (usz)pdq_less(cmp, ctx, *last, pivot);
+
 					offsets_r[num_r] = ++i;
 					last--;
 					num_r += (usz)pdq_less(cmp, ctx, *last, pivot);
+
 					offsets_r[num_r] = ++i;
 					last--;
 					num_r += (usz)pdq_less(cmp, ctx, *last, pivot);
@@ -432,30 +543,36 @@ fn PartitionResult partition_right_branchless(ElementType[] value, CmpFn cmp, Co
 		if (num_l > 0)
 		{
 			offsets_l += (sz)start_l;
+
 			while (num_l > 0)
 			{
 				num_l--;
 				last--;
+
 				ElementType* l   = offset_l_base + (usz)offsets_l[num_l];
 				ElementType ltmp = *l;
 				*l = *last;
 				*last = ltmp;
 			}
+
 			first = last;
 		}
 
 		if (num_r > 0)
 		{
 			offsets_r += (sz)start_r;
+
 			while (num_r > 0)
 			{
 				num_r--;
+
 				ElementType* r   = offset_r_base - (sz)offsets_r[num_r];
 				ElementType rtmp = *r;
 				*r = *first;
 				*first = rtmp;
 				first++;
 			}
+
 			last = first;
 		}
 	}
@@ -502,9 +619,11 @@ fn PartitionResult partition_right(ElementType[] value, CmpFn cmp, Context ctx) 
 	while (first < last)
 	{
 		pdq_swap_elem(first, last);
+
 		while (pdq_less(cmp, ctx, *(++first), pivot))
 		{
 		}
+
 		while (!pdq_less(cmp, ctx, *(--last), pivot))
 		{
 		}
@@ -549,9 +668,11 @@ fn ElementType* partition_left(ElementType[] value, CmpFn cmp, Context ctx) @inl
 	while (first < last)
 	{
 		pdq_swap_elem(first, last);
+
 		while (pdq_less(cmp, ctx, pivot, *(--last)))
 		{
 		}
+
 		while (!pdq_less(cmp, ctx, pivot, *(++first)))
 		{
 		}
@@ -601,9 +722,8 @@ fn void pdq_sort8(ElementType* p, CmpFn cmp, Context ctx) @inline
 	pdq_sort2(p + 5, p + 6, cmp, ctx);
 }
 
-// replaces pdq_insertion_sort & pdq_unguarded_insertion_sort
-// guarded == true  -> leftmost partition (no sentinel before data.ptr)
-// guarded == false -> *(data.ptr - 1) <= every element, so the scan needs no bound check
+// Guarded: leftmost partition, no sentinel before data.ptr.
+// Unguarded: *(data.ptr - 1) <= every element.
 fn void pdq_small_sort(ElementType[] data, CmpFn cmp, Context ctx, bool guarded) @inline
 {
 	usz n = data.len;
@@ -613,7 +733,8 @@ fn void pdq_small_sort(ElementType[] data, CmpFn cmp, Context ctx, bool guarded)
 	ElementType* end   = begin + n;
 	ElementType* cur   = begin + 1;
 
-	var $use_network = $Typeof(cmp) == sort::TypeNotSet &&& ElementType::size <= 16;
+	var $use_network = $Typeof(cmp) == TypeNotSet &&& ElementType::size <= 16;
+
 	$if $use_network:
 		if (n >= 8)
 		{
@@ -633,22 +754,25 @@ fn void pdq_small_sort(ElementType[] data, CmpFn cmp, Context ctx, bool guarded)
 		{
 			ElementType key   = *cur;
 			ElementType* hole = cur;
+
 			do
 			{
 				*hole = *(hole - 1);
 				hole--;
 			} while ((!guarded || hole > begin) && pdq_less(cmp, ctx, key, *(hole - 1)));
+
 			*hole = key;
 		}
 	}
 }
 
-//  pivot selection: median of 3, or ninther for big partitions; pivot ends at begin,
-//  min at begin+s2 and max at end-1 (these stoppers - the unguarded scans rely on)
+// Pivot selection: median of 3 or ninther for large partitions.
+// Pivot ends at begin, min at begin + s2, max at end - 1.
 fn void pdq_choose_pivot(ElementType* begin, usz size, CmpFn cmp, Context ctx) @inline
 {
 	usz s2            = size / 2;
 	ElementType* last = begin + size - 1;
+
 	if (size > NINTER_THRESHOLD)
 	{
 		pdq_sort3(begin, begin + s2, last, cmp, ctx);
@@ -711,6 +835,7 @@ fn void pdqsort_loop(
 		if (highly_unbalanced)
 		{
 			bad_allowed--;
+
 			if (bad_allowed <= 0)
 			{
 				pdq_heap_sort(begin[0:size], cmp, ctx);
@@ -721,6 +846,7 @@ fn void pdqsort_loop(
 			{
 				pdq_swap_elem(begin, begin + l_size / 4);
 				pdq_swap_elem(pivot_pos - 1, pivot_pos - (sz)(l_size / 4));
+
 				if (l_size > NINTER_THRESHOLD)
 				{
 					pdq_swap_elem(begin + 1, begin + (l_size / 4 + 1));
@@ -729,10 +855,12 @@ fn void pdqsort_loop(
 					pdq_swap_elem(pivot_pos - 3, pivot_pos - (sz)(l_size / 4 + 2));
 				}
 			}
+
 			if (r_size >= INSERTION_SORT_THRESHOLD)
 			{
 				pdq_swap_elem(pivot_pos + 1, pivot_pos + (1 + r_size / 4));
 				pdq_swap_elem(end - 1, end - (sz)(r_size / 4));
+
 				if (r_size > NINTER_THRESHOLD)
 				{
 					pdq_swap_elem(pivot_pos + 2, pivot_pos + (2 + r_size / 4));

@@ -1,4 +1,4 @@
-import std::sort;
+import pdqsort;
 import std::collections::list;
 
 struct Big
@@ -28,21 +28,21 @@ Big[MAX_N] t_big;
 fn void test_sort_empty() @test
 {
 	int[] data = { };
-	sort::pdqsort(data);
+	pdqsort(data);
 	assert(data.len == 0);
 }
 
 fn void test_sort_single_element() @test
 {
 	int[] data = { 42 };
-	sort::pdqsort(data);
+	pdqsort(data);
 	assert(data[0] == 42);
 }
 
 fn void test_sort_two_elements_sorted() @test
 {
 	int[] data = { 1, 2 };
-	sort::pdqsort(data);
+	pdqsort(data);
 	assert(data[0] == 1);
 	assert(data[1] == 2);
 }
@@ -50,7 +50,7 @@ fn void test_sort_two_elements_sorted() @test
 fn void test_sort_two_elements_reversed() @test
 {
 	int[] data = { 2, 1 };
-	sort::pdqsort(data);
+	pdqsort(data);
 	assert(data[0] == 1);
 	assert(data[1] == 2);
 }
@@ -58,7 +58,7 @@ fn void test_sort_two_elements_reversed() @test
 fn void test_sort_already_sorted() @test
 {
 	int[] data = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
-	sort::pdqsort(data);
+	pdqsort(data);
 
 	for (usz i = 1; i < data.len; i++)
 	{
@@ -69,7 +69,7 @@ fn void test_sort_already_sorted() @test
 fn void test_sort_reverse_sorted() @test
 {
 	int[] data = { 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 };
-	sort::pdqsort(data);
+	pdqsort(data);
 
 	for (usz i = 1; i < data.len; i++)
 	{
@@ -112,7 +112,7 @@ fn void test_sort_all_equal() @test
 		7,
 	};
 
-	sort::pdqsort(data);
+	pdqsort(data);
 
 	for (usz i = 1; i < data.len; i++)
 	{
@@ -155,7 +155,7 @@ fn void test_sort_duplicate_heavy() @test
 		5,
 	};
 
-	sort::pdqsort(data);
+	pdqsort(data);
 
 	for (usz i = 1; i < data.len; i++)
 	{
@@ -178,7 +178,7 @@ fn void test_sort_negative_values() @test
 		-5,
 	};
 
-	sort::pdqsort(data);
+	pdqsort(data);
 
 	for (usz i = 1; i < data.len; i++)
 	{
@@ -200,7 +200,7 @@ fn void test_sort_mixed_extremes() @test
 		-42,
 	};
 
-	sort::pdqsort(data);
+	pdqsort(data);
 
 	for (usz i = 1; i < data.len; i++)
 	{
@@ -237,7 +237,7 @@ fn void test_sort_insertion_sort_threshold() @test
 		1,
 	};
 
-	sort::pdqsort(data);
+	pdqsort(data);
 
 	for (usz i = 1; i < data.len; i++)
 	{
@@ -280,7 +280,7 @@ fn void test_sort_above_insertion_sort_threshold() @test
 		1,
 	};
 
-	sort::pdqsort(data);
+	pdqsort(data);
 
 	for (usz i = 1; i < data.len; i++)
 	{
@@ -421,7 +421,7 @@ fn void test_sort_ninther_threshold() @test
 		1,
 	};
 
-	sort::pdqsort(data);
+	pdqsort(data);
 
 	for (usz i = 1; i < data.len; i++)
 	{
@@ -434,7 +434,7 @@ fn void test_sort_preserves_element_count() @test
 	int[] data       = { 3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5 };
 	usz original_len = data.len;
 
-	sort::pdqsort(data);
+	pdqsort(data);
 
 	assert(data.len == original_len);
 }
@@ -444,7 +444,7 @@ fn void test_sort_preserves_elements() @test
 	int[] data       = { 3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5 };
 	int[11] expected = { 1, 1, 2, 3, 3, 4, 5, 5, 5, 6, 9 };
 
-	sort::pdqsort(data);
+	pdqsort(data);
 
 	for (usz i = 0; i < data.len; i++)
 	{
@@ -462,7 +462,7 @@ fn void test_sort_large_reverse_sorted() @test => @pool()
 	}
 
 	int[] sorted = data.to_array(tmem);
-	sort::pdqsort(sorted);
+	pdqsort(sorted);
 
 	for (sz i = 1; i < sorted.len; i++)
 	{
@@ -480,7 +480,7 @@ fn void test_sort_large_duplicate_heavy() @test => @pool()
 	}
 
 	int[] sorted = data.to_array(tmem);
-	sort::pdqsort(sorted);
+	pdqsort(sorted);
 
 	for (sz i = 1; i < sorted.len; i++)
 	{
@@ -573,8 +573,8 @@ fn void test_sweep_small_sizes() @test
 	{
 		for (int pattern = 0; pattern < 8; pattern++)
 		{
-			check_sort(n, pattern, false, sort::log2(n + 1), &rng);
-			check_sort(n, pattern, true, sort::log2(n + 1), &rng);
+			check_sort(n, pattern, false, pdqsort::log2(n + 1), &rng);
+			check_sort(n, pattern, true, pdqsort::log2(n + 1), &rng);
 		}
 	}
 }
@@ -587,8 +587,8 @@ fn void test_large_sizes() @test
 	{
 		for (int pattern = 0; pattern < 8; pattern++)
 		{
-			check_sort(n, pattern, false, sort::log2(n), &rng);
-			check_sort(n, pattern, true, sort::log2(n), &rng);
+			check_sort(n, pattern, false, pdqsort::log2(n), &rng);
+			check_sort(n, pattern, true, pdqsort::log2(n), &rng);
 		}
 	}
 }
@@ -600,7 +600,7 @@ fn void test_many_random_trials() @test
 	{
 		usz n       = (usz)(next_rand(&rng) % 3000);
 		int pattern = (int)(next_rand(&rng) % 8);
-		check_sort(n, pattern, trial % 2 == 0, sort::log2(n + 1), &rng);
+		check_sort(n, pattern, trial % 2 == 0, pdqsort::log2(n + 1), &rng);
 	}
 }
 
@@ -663,7 +663,7 @@ fn void test_branchless_int_no_cmp() @test
 			uint s = 0x12345678 + (uint)n;
 			for (usz i = 0; i < n; i++) t_int[i] = t_ref[i] = gen_val(p, i, n, &s);
 			ref_sort(t_ref[:n]);
-			sort::pdqsort_branchless(t_int[:n]);
+			pdqsort_branchless(t_int[:n]);
 			for (usz i = 0; i < n; i++)
 			{
 				assert(t_int[i] == t_ref[i], "branchless int: n=%d pattern=%d idx=%d", n, p, i);
@@ -681,7 +681,7 @@ fn void test_pdqsort_int_with_cmp() @test
 			uint s = 0xABCDEF01 + (uint)n;
 			for (usz i = 0; i < n; i++) t_int[i] = t_ref[i] = gen_val(p, i, n, &s);
 			ref_sort(t_ref[:n]);
-			sort::pdqsort(t_int[:n], &cmp_int_t);
+			pdqsort(t_int[:n], &cmp_int_t);
 			for (usz i = 0; i < n; i++)
 			{
 				assert(t_int[i] == t_ref[i], "int+cmp: n=%d pattern=%d idx=%d", n, p, i);
@@ -699,7 +699,7 @@ fn void test_branchless_int_with_cmp() @test
 			uint s = 0x0F0F0F0F + (uint)n;
 			for (usz i = 0; i < n; i++) t_int[i] = t_ref[i] = gen_val(p, i, n, &s);
 			ref_sort(t_ref[:n]);
-			sort::pdqsort_branchless(t_int[:n], &cmp_int_t);
+			pdqsort_branchless(t_int[:n], &cmp_int_t);
 			for (usz i = 0; i < n; i++)
 			{
 				assert(t_int[i] == t_ref[i], "branchless int+cmp: n=%d pattern=%d idx=%d", n, p, i);
@@ -722,11 +722,11 @@ fn void check_big(usz n, int p, bool branchless)
 
 	if (branchless)
 	{
-		sort::pdqsort_branchless(t_big[:n], &cmp_big);
+		pdqsort_branchless(t_big[:n], &cmp_big);
 	}
 	else
 	{
-		sort::pdqsort(t_big[:n], &cmp_big);
+		pdqsort(t_big[:n], &cmp_big);
 	}
 
 	for (usz i = 0; i < n; i++)
@@ -765,7 +765,7 @@ fn void test_float_sort() @test
 				t_f32[i] = t_f32_ref[i] = v;
 			}
 			ref_sort(t_f32_ref[:n]);
-			sort::pdqsort(t_f32[:n]);
+			pdqsort(t_f32[:n]);
 			for (usz i = 0; i < n; i++)
 			{
 				assert(t_f32[i] == t_f32_ref[i], "float: n=%d pattern=%d idx=%d", n, p, i);
@@ -787,7 +787,7 @@ fn void test_double_sort() @test
 				t_f64[i] = t_f64_ref[i] = v;
 			}
 			ref_sort(t_f64_ref[:n]);
-			sort::pdqsort(t_f64[:n]);
+			pdqsort(t_f64[:n]);
 			for (usz i = 0; i < n; i++)
 			{
 				assert(t_f64[i] == t_f64_ref[i], "double: n=%d pattern=%d idx=%d", n, p, i);
@@ -807,7 +807,7 @@ fn void test_float_branchless_forced() @test
 			t_f32[i] = t_f32_ref[i] = v;
 		}
 		ref_sort(t_f32_ref[:n]);
-		sort::pdqsort_branchless(t_f32[:n]);
+		pdqsort_branchless(t_f32[:n]);
 		for (usz i = 0; i < n; i++)
 		{
 			assert(t_f32[i] == t_f32_ref[i], "float branchless: n=%d idx=%d", n, i);
@@ -822,14 +822,14 @@ fn void test_network_01_int() @test
 	{
 		int[8] a;
 		for (usz i = 0; i < 8; i++) a[i] = (int)((m >> i) & 1);
-		sort::pdqsort(a[..]);
+		pdqsort(a[..]);
 		for (usz i = 1; i < 8; i++) assert(a[i - 1] <= a[i], "int sort8 failed, pattern %d", m);
 	}
 	for (uint m = 0; m < 16; m++)
 	{
 		int[4] a;
 		for (usz i = 0; i < 4; i++) a[i] = (int)((m >> i) & 1);
-		sort::pdqsort(a[..]);
+		pdqsort(a[..]);
 		for (usz i = 1; i < 4; i++) assert(a[i - 1] <= a[i], "int sort4 failed, pattern %d", m);
 	}
 }
@@ -840,14 +840,14 @@ fn void test_network_01_float() @test
 	{
 		float[8] a;
 		for (usz i = 0; i < 8; i++) a[i] = (float)((m >> i) & 1);
-		sort::pdqsort(a[..]);
+		pdqsort(a[..]);
 		for (usz i = 1; i < 8; i++) assert(a[i - 1] <= a[i], "float sort8 failed, pattern %d", m);
 	}
 	for (uint m = 0; m < 16; m++)
 	{
 		float[4] a;
 		for (usz i = 0; i < 4; i++) a[i] = (float)((m >> i) & 1);
-		sort::pdqsort(a[..]);
+		pdqsort(a[..]);
 		for (usz i = 1; i < 4; i++) assert(a[i - 1] <= a[i], "float sort4 failed, pattern %d", m);
 	}
 }
@@ -858,12 +858,12 @@ fn void test_network_01_double_and_branchless() @test
 	{
 		double[8] a;
 		for (usz i = 0; i < 8; i++) a[i] = (double)((m >> i) & 1);
-		sort::pdqsort(a[..]);
+		pdqsort(a[..]);
 		for (usz i = 1; i < 8; i++) assert(a[i - 1] <= a[i], "double sort8 failed, pattern %d", m);
 
 		int[8] b;
 		for (usz i = 0; i < 8; i++) b[i] = (int)((m >> i) & 1);
-		sort::pdqsort_branchless(b[..]);
+		pdqsort_branchless(b[..]);
 		for (usz i = 1; i < 8; i++) assert(b[i
 			- 1] <= b[i], "branchless sort8 failed, pattern %d", m);
 	}
