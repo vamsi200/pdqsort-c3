@@ -48,33 +48,6 @@ pdqsort_branchless(values);
 
 The branchless variant is primarily useful for inexpensive comparisons where branch mispredictions contribute significantly to execution time. It is not necessarily faster for every workload.
 
-### Custom comparators
-
-Both variants accept an optional comparison function:
-
-```c3
-fn int descending(int a, int b)
-{
-    return b <=> a;
-}
-
-fn void example()
-{
-    int[] values = { 4, 1, 9, 2, 7 };
-
-    pdqsort(values, &descending);
-    // { 9, 7, 4, 2, 1 }
-}
-```
-
-Comparison functions must return a signed integer:
-
-- Negative if the first element precedes the second.
-- Zero if the elements compare equal.
-- Positive if the first element follows the second.
-
-Comparators may accept elements by value or by pointer. An optional context argument is also supported.
-
 ### Arrays and slices
 
 Slices can be sorted directly. Fixed-size arrays and other supported indexable containers must be passed by reference.
