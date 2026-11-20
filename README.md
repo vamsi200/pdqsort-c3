@@ -27,7 +27,7 @@ fn int main(String[] args) => @pool()
 {
     int[] values = { 9, 3, 7, 1, 5, 2 };
 
-    pdqsort::pdqsort(values);
+    pdqsort(values);
 
     io::printn(values);
     // { 1, 2, 3, 5, 7, 9 }
@@ -43,7 +43,7 @@ For integer and floating-point types, the default macro automatically selects br
 To force branchless partitioning:
 
 ```c3
-pdqsort::pdqsort_branchless(values);
+pdqsort_branchless(values);
 ```
 
 The branchless variant is primarily useful for inexpensive comparisons where branch mispredictions contribute significantly to execution time. It is not necessarily faster for every workload.
@@ -62,7 +62,7 @@ fn void example()
 {
     int[] values = { 4, 1, 9, 2, 7 };
 
-    pdqsort::pdqsort(values, &descending);
+    pdqsort(values, &descending);
     // { 9, 7, 4, 2, 1 }
 }
 ```
@@ -81,10 +81,10 @@ Slices can be sorted directly. Fixed-size arrays and other supported indexable c
 
 ```c3
 int[] slice = { 5, 2, 8, 1 };
-pdqsort::pdqsort(slice);
+pdqsort(slice);
 
 int[4] array = { 5, 2, 8, 1 };
-pdqsort::pdqsort(&array);
+pdqsort(&array);
 ```
 
 Sorting modifies the supplied collection in place.
